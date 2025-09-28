@@ -2,6 +2,8 @@
 
 A Flask web application for real-time interaction with the FastVLM-0.5B model using ONNX runtime on CPU. Capture live video from your webcam, provide voice or text prompts, and generate concise image descriptions or responses streamed in real-time. Supports continuous voice recognition, prompt locking for automated captioning, and aspect-ratio-preserving video rendering with black bars for unfilled areas.
 
+Try my huggingface space for this app (with latency because of free tier usage) available at [https://huggingface.co/spaces/safouaneelg/Talk2FastVLM](https://huggingface.co/spaces/safouaneelg/Talk2FastVLM).
+
 ## Demo
 
 [DEMO.webm](https://github.com/user-attachments/assets/679db7b4-67b0-45f2-9b64-23782b5e0fec)
