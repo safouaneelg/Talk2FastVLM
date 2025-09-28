@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastVLM + Real-Time Scene Description</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: black;
+            color: #333;
+        }
+        #output_canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+        }
+        #caption {
+            position: fixed;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            padding: 20px;
+            background: rgba(1, 32, 66, 0.45);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center;
+            font-size: 18px;
+            line-height: 1.6;
+            color: white;
+            min-height: 50px;
+            z-index: 5;
+            transition: all 0.3s ease;
+        }
+        #chat-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+            z-index: 10;
+            transition: all 0.3s ease;
+            height: 80px;
+            box-sizing: border-box;
+        }
+        #options-div {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        #input-group {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            max-width: 60%;
+            gap: 10px;
+            position: relative;
+        }
+        #promptInput {
+            flex: 1;
+            min-height: 40px;
+            padding: 10px 50px 10px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            resize: none;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, 0.28);
+            color: #ffffffff;
+        }
+        #promptInput:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+        .mic-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .mic-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: #333;
+            transform: translateY(-50%) scale(1.05);
+        }
+        .mic-btn.listening {
+            background: rgba(255, 0, 0, 0.6);
+            color: white;
+            animation: pulse 1s infinite;
+        }
+        .mic-btn.processing {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: #333;
+        }
+        .mic-btn.processing:hover {
+            background: linear-gradient(135deg, #e0a800, #d39e00);
+        }
+        @keyframes pulse {
+            0% { transform: translateY(-50%) scale(1); }
+            50% { transform: translateY(-50%) scale(1.1); }
+            100% { transform: translateY(-50%) scale(1); }
+        }
+        .action-buttons {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            align-items: center;
+        }
+        .action-btn {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            color: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .lock-btn {
+            background: linear-gradient(135deg, #6c757d, #495057);
+        }
+        .lock-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #5a6268, #3d4043);
+            transform: scale(1.05);
+        }
+        .lock-btn i {
+            color: white;
+        }
+        .send-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+        }
+        .send-btn:hover {
+            background: linear-gradient(135deg, #218838, #1ea085);
+            transform: scale(1.05);
+        }
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .settings-btn {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+        }
+        .settings-btn:hover {
+            background: linear-gradient(135deg, #e0a800, #d39e00);
+            transform: scale(1.05);
+        }
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+            margin: 10% auto;
+            padding: 0;
+            border: none;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            color: white;
+            overflow: hidden;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #aaa;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        .modal-body {
+            padding: 20px;
+        }
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .setting-item label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #ccc;
+        }
+        .setting-item select,
+        .setting-item input[type="checkbox"] {
+            font-family: 'Inter', sans-serif;
+        }
+        .setting-item select {
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        .setting-item select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        .setting-item select option {
+            background: #1a1a1a;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline style="display: none;"></video>
+    <canvas id="output_canvas"></canvas>
+    <div id="caption">Caption will appear here...</div>
+    <div id="chat-container">
+        <div id="options-div">
+            <button class="action-btn settings-btn" id="settingsBtn" title="Settings">
+                <i class="fa-solid fa-cog"></i>
+            </button>
+        </div>
+        <div id="input-group">
+            <textarea id="promptInput" placeholder="Enter your prompt here." rows="1"></textarea>
+            <button class="mic-btn" id="micBtn" title="Voice Input">
+                <i class="fa-solid fa-microphone"></i>
+            </button>
+        </div>
+        <div class="action-buttons">
+            <button class="action-btn lock-btn" id="lockBtn" title="Lock Prompt">
+                <i class="fa-solid fa-lock"></i>
+            </button>
+            <button class="action-btn send-btn" id="sendBtn" title="Send">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-item">
+                    <label for="langSelect">Voice Recognition Language:</label>
+                    <select id="langSelect">
+                        <option value="en-US">English (US)</option>
+                        <option value="en-GB">English (UK)</option>
+                        <option value="es-ES">Español</option>
+                        <option value="fr-FR">Français</option>
+                        <option value="de-DE">Deutsch</option>
+                        <option value="it-IT">Italiano</option>
+                        <option value="pt-BR">Português (BR)</option>
+                        <option value="ja-JP">日本語</option>
+                        <option value="zh-CN">中文 (简体)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/static/app.js"></script>
+</body>
+</html>
